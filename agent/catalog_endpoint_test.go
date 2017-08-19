@@ -14,41 +14,33 @@ import (
 
 func TestCatalogRegister(t *testing.T) {
 	t.Parallel()
-	a := NewTestAgent(t.Name(), nil)
+	cfg := TestConfig()
+	a := NewTestAgent(t.Name(), cfg)
 	defer a.Shutdown()
 
-	// Register node
+	// Register service on current node
 	args := &structs.RegisterRequest{
-		Node:    "foo",
+		Node:    cfg.NodeName,
 		Address: "127.0.0.1",
+		Service: &structs.NodeService{
+			Service: "foo",
+			Address: "1.2.3.4",
+			Port:    8080,
+		},
 	}
 	req, _ := http.NewRequest("GET", "/v1/catalog/register", jsonReader(args))
 	obj, err := a.srv.CatalogRegister(nil, req)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-
 	res := obj.(bool)
 	if res != true {
 		t.Fatalf("bad: %v", res)
 	}
 
-	// todo(fs): data race
-	// func() {
-	// 	a.State.Lock()
-	// 	defer a.State.Unlock()
-
-	// 	// Service should be in sync
-	// 	if err := a.State.syncService("foo"); err != nil {
-	// 		t.Fatalf("err: %s", err)
-	// 	}
-	// 	if _, ok := a.State.serviceStatus["foo"]; !ok {
-	// 		t.Fatalf("bad: %#v", a.State.serviceStatus)
-	// 	}
-	// 	if !a.State.serviceStatus["foo"].inSync {
-	// 		t.Fatalf("should be in sync")
-	// 	}
-	// }()
+	if err := a.State.UpdateSyncState(); err != nil {
+		t.Fatal("update sync state failed: ", err)
+	}
 	if err := a.State.SyncChanges(); err != nil {
 		t.Fatal("sync failed: ", err)
 	}
